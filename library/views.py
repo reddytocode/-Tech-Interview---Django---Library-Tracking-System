@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import Author, Book, Member, Loan
-from .serializers import AuthorSerializer, BookSerializer, MemberSerializer, LoanSerializer
+from .serializers import AuthorSerializer, BookSerializer, MemberSerializer, LoanSerializer, ExtendDueDateLoanSerializer 
 from rest_framework.decorators import action
 from django.utils import timezone
 from .tasks import send_loan_notification
@@ -52,3 +52,20 @@ class MemberViewSet(viewsets.ModelViewSet):
 class LoanViewSet(viewsets.ModelViewSet):
     queryset = Loan.objects.all()
     serializer_class = LoanSerializer
+
+    def get_queryset(self):
+        return super().get_queryset().select_related("book", "member")
+
+    @action(methods=["POST"], detail=True)
+    def extend_due_date(self, request, *args, **kwargs):
+        serializer = ExtendDueDateLoanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        loan = self.get_object()
+        if loan.is_overdue:
+            return Response({"message": "The book is overdue, you can't extend the due date."}, status=400)
+        else:
+            loan.extend_due_date(serializer.validated_data["additional_days"])
+
+        return Response(LoanSerializer(instance=loan).data)
+

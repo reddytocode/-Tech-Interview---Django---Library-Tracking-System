@@ -1,5 +1,9 @@
-from django.db import models
+from datetime import timedelta
+
 from django.contrib.auth.models import User
+from django.db import models
+from django.utils import timezone
+
 
 class Author(models.Model):
     first_name = models.CharField(max_length=100)
@@ -41,6 +45,23 @@ class Loan(models.Model):
     loan_date = models.DateField(auto_now_add=True)
     return_date = models.DateField(null=True, blank=True)
     is_returned = models.BooleanField(default=False)
+    due_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.book.title} loaned to {self.member.user.username}"
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.due_date = timezone.now() + timedelta(days=14)
+        return super().save(*args, **kwargs) 
+    
+    @property
+    def is_overdue(self):
+        return self.is_returned is False and self.due_date > timezone.now().date()
+    
+    def extend_due_date(self, days):
+        print("extending the due date by", days)
+        print("old due date", self.due_date)
+        self.due_date = self.due_date + timedelta(days=days)
+        print("ne due date", self.due_date)
+        self.save(update_fields=["due_date"])
